@@ -63,7 +63,7 @@ class TextProcessor(QThread):
         self.text = text
         self.use_gemini = use_gemini
         self.running = True
-        os.environ['GOOGLE_API_KEY'] = 'AIzaSyDCsW36FPu38wqYzPRHSxaeHpgvC5NcAWw'
+        os.environ['GOOGLE_API_KEY'] = ''
     
     def stop(self):
         self.running = False
@@ -602,3 +602,4 @@ if __name__ == "__main__":
     assistant = AIAssistant()
     debug_print("Application started")
     sys.exit(app.exec())
+

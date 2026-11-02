@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import sys
 import threading
+
+import pytest
+
+if sys.platform != "win32":
+    pytest.skip("Qt desktop threading is validated on Windows CI.", allow_module_level=True)
 
 from PyQt6.QtCore import QCoreApplication
 

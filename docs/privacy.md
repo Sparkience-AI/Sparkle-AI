@@ -23,8 +23,10 @@ the key or captured text to logs or process-global environment variables.
 ## Retention and deletion
 
 The overlay retains the current response only for the running process. Closing the overlay cancels
-the current application task where cooperative cancellation is possible. Exiting the tray
-application clears in-memory state. There is no conversation database or analytics service.
+any deferred start and signals the current application task to stop between provider chunks.
+Exiting is deferred while a blocking local provider call is still stopping, preventing unsafe
+worker destruction. Exiting the tray application clears in-memory state. There is no conversation
+database or analytics service.
 
 ## Known limitations
 

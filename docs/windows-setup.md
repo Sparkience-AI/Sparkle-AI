@@ -12,7 +12,7 @@ Install the locked environment and local model:
 ```powershell
 uv sync --locked
 ollama pull llama3.2:3b
-uv run --locked python main.py
+uv run --locked sparkle-ai
 ```
 
 The global hotkey library may require permissions allowed by the local Windows security policy.

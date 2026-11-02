@@ -38,7 +38,7 @@ git clone https://github.com/Sparkience-AI/Sparkle-AI.git
 cd Sparkle-AI
 uv sync --locked
 ollama pull llama3.2:3b
-uv run --locked python main.py
+uv run --locked sparkle-ai
 ```
 
 Copy text, then press `Ctrl+Shift+Space`. The text is read only after that explicit action. Pause
@@ -57,9 +57,10 @@ and credential-storage decisions are implemented. See [Privacy](docs/privacy.md)
 
 ## Architecture
 
-The PyQt interface remains in `main.py` during this conservative first extraction. Testable logic
-now lives under `src/sparkle_ai`:
+The packaged PyQt interface and testable logic live under `src/sparkle_ai`; the root `main.py`
+remains a source-checkout compatibility launcher:
 
+- `desktop.py`: GUI-thread bridge, tray/hotkey integration, overlay, and worker lifecycle.
 - `application.py`: input policy, cancellation boundary, and streaming orchestration.
 - `providers.py`: loopback Ollama and optional Gemini adapters.
 - `prompts.py`: versioned, injection-aware prompt construction.
@@ -77,7 +78,8 @@ uv build --no-sources
 ```
 
 Normal tests use fake providers and do not require Ollama, Gemini, a Google API key, or network
-access.
+access. CI also builds and smoke-tests the installed Windows launcher on Python 3.11–3.13. This is
+package verification, not a signed installer or full GUI acceptance test.
 
 ## Security and support
 

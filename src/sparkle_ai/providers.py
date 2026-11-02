@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterable
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 
 class TextProvider(Protocol):
@@ -13,6 +14,29 @@ class TextProvider(Protocol):
 
 OllamaClientFactory = Callable[..., Any]
 GeminiClientFactory = Callable[..., Any]
+
+
+class EndpointPolicyError(ValueError):
+    """Raised when an Ollama endpoint is not an explicit loopback URL."""
+
+
+def validate_loopback_endpoint(host: str) -> str:
+    try:
+        parsed = urlsplit(host)
+        port = parsed.port
+    except ValueError as exc:
+        raise EndpointPolicyError("The Ollama endpoint contains an invalid host or port.") from exc
+    if parsed.scheme not in {"http", "https"}:
+        raise EndpointPolicyError("The Ollama endpoint must use HTTP or HTTPS.")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise EndpointPolicyError("The Ollama endpoint must not contain credentials or parameters.")
+    if parsed.path not in {"", "/"}:
+        raise EndpointPolicyError("The Ollama endpoint must not contain a path.")
+    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+        raise EndpointPolicyError("Sparkle AI supports loopback Ollama endpoints only.")
+    if port is None or not 1 <= port <= 65_535:
+        raise EndpointPolicyError("The Ollama endpoint must include a port from 1 to 65535.")
+    return host.rstrip("/")
 
 
 class OllamaProvider:
@@ -28,6 +52,7 @@ class OllamaProvider:
     ) -> None:
         if not model.strip():
             raise ValueError("An Ollama model is required.")
+        host = validate_loopback_endpoint(host)
         if client_factory is None:
             from ollama import Client
 

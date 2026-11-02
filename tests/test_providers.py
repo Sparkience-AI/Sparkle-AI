@@ -1,6 +1,6 @@
 import pytest
 
-from sparkle_ai.providers import GeminiProvider, OllamaProvider
+from sparkle_ai.providers import EndpointPolicyError, GeminiProvider, OllamaProvider
 
 
 class FakeOllamaClient:
@@ -32,6 +32,22 @@ def test_ollama_provider_uses_loopback_timeout_model_and_streaming() -> None:
     assert factory_calls == [{"host": "http://127.0.0.1:11434", "timeout": 60.0}]
     assert client.calls[0]["model"] == "test-model"
     assert client.calls[0]["stream"] is True
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "http://192.168.1.10:11434",
+        "https://ollama.example.com:11434",
+        "http://user:secret@localhost:11434",
+        "http://localhost:not-a-port",
+        "http://localhost:70000",
+        "file:///tmp/ollama.sock",
+    ],
+)
+def test_ollama_provider_rejects_non_loopback_or_ambiguous_hosts(host: str) -> None:
+    with pytest.raises(EndpointPolicyError):
+        OllamaProvider(host=host, client_factory=lambda **_: FakeOllamaClient())
 
 
 def test_gemini_provider_requires_an_explicit_key() -> None:

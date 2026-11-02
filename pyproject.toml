@@ -25,6 +25,9 @@ dependencies = [
   "pyqt6>=6.7,<7",
 ]
 
+[project.gui-scripts]
+sparkle-ai = "sparkle_ai.desktop:main"
+
 [project.optional-dependencies]
 gemini = [
   "langchain-core>=0.3,<2",
@@ -39,6 +42,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sparkle_ai"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["sparkask in action.mp4"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

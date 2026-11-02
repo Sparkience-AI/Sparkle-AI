@@ -7,7 +7,7 @@ rewrite.
 Explicit hotkey or tray action
           |
           v
-PyQt interface (`main.py`)
+Packaged PyQt interface (`sparkle_ai.desktop`)
           |
           v
 InputPolicy -> AnalysisService -> TextProvider
@@ -23,11 +23,14 @@ InputPolicy -> AnalysisService -> TextProvider
 - The application service validates input, owns cancellation state, and streams only text chunks.
 - Provider adapters receive application-owned prompts and must not mutate process-global credential
   state.
-- Ollama is constrained to the loopback default. Publicly exposing an Ollama daemon is outside the
+- Ollama endpoints are validated as explicit loopback URLs. Publicly exposing an Ollama daemon is outside the
   supported contract.
 
 ## Current extraction boundary
 
-The UI, tray integration, global hotkey, and worker thread remain in `main.py`. Moving them before
-the PyQt/PySide licensing decision would create unnecessary churn. Unit tests target the extracted
-core and fake-provider behavior. Windows UI and clean-machine package tests remain release gates.
+The UI, tray integration, global hotkey, and worker thread remain together in `desktop.py`; this is
+a packaging move, not a PyQt/PySide rewrite. A Qt signal bridge marshals the global-hotkey callback
+onto the GUI thread, while a cancellable Qt timer owns deferred request starts. Unit tests target
+the bridge, extracted core, and fake-provider behavior. CI builds and smoke-tests the installed
+launcher on Windows, while clean-VM GUI, hotkey, Ollama, signing, and installer tests remain release
+gates.

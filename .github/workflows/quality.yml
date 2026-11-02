@@ -1,0 +1,16 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-quality:
+    uses: Sparkience-AI/.github/.github/workflows/reusable-python-quality.yml@main
+    with:
+      python-version: "3.12"
+      run-type-check: false

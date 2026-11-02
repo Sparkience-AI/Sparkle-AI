@@ -1,33 +1,30 @@
+import datetime
 import sys
-import os
+from pathlib import Path
+from threading import Event
+
 import keyboard
-import pyperclip
-import win32gui
-import win32con
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QPushButton,
-    QSystemTrayIcon,
-    QMenu,
     QFrame,
     QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QPushButton,
     QScrollArea,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+    QWidgetAction,
 )
-from PyQt6.QtWidgets import QLineEdit, QHBoxLayout, QWidgetAction
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve, QTimer
-from PyQt6.QtGui import QIcon, QFont, QFontDatabase, QCursor, QColor, QPixmap, QPainter
-import requests
-from pathlib import Path
-import json
-import ollama
-from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-import datetime
+from sparkle_ai.application import AnalysisService, safe_error_message
+from sparkle_ai.providers import OllamaProvider, TextProvider
 
 
 def debug_print(message):
@@ -63,100 +60,43 @@ class AnimatedLabel(QLabel):
                 self.opacity_effect.setOpacity(1.0)
 
 
-# In TextProcessor class, add a stop method
 class TextProcessor(QThread):
     result_ready = pyqtSignal(str)
     chunk_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, text, use_gemini=False):
+    def __init__(self, text: str, provider: TextProvider):
         super().__init__()
         self.text = text
-        self.use_gemini = use_gemini
-        self.running = True
-        os.environ["GOOGLE_API_KEY"] = ""
+        self.service = AnalysisService(provider)
+        self.cancelled = Event()
 
     def stop(self):
-        self.running = False
-        self.wait()  # Wait for the thread to finish
+        self.cancelled.set()
+        self.requestInterruption()
+        return self.wait(2_000)
 
     def run(self):
         try:
-            if not self.running:
+            if self.cancelled.is_set():
                 return
 
-            debug_print(f"Starting text processing thread")
-            if self.use_gemini and self._check_internet():
-                debug_print("Using Gemini for processing")
-                response = self._process_with_gemini()
-            else:
-                debug_print("Using Ollama for processing")
-                response = self._process_with_ollama()
-
-            if response and self.running:
-                debug_print("Processing completed successfully")
-                self.result_ready.emit(response)
-            elif self.running:
-                self.error_occurred.emit("No response received from AI model")
-        except Exception as e:
-            if self.running:
-                debug_print(f"Error in TextProcessor: {str(e)}")
-                self.error_occurred.emit(f"Error processing text: {str(e)}")
-
-    def _check_internet(self):
-        try:
-            requests.get("http://www.google.com", timeout=3)
-            return True
-        except requests.RequestException:
-            debug_print("No internet connection detected")
-            return False
-
-    def _process_with_ollama(self):
-        try:
-            accumulated_response = ""
-            stream = ollama.chat(
-                model="llama3.2:3b",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"Analyze this text and provide a relevant explanation: {self.text}",
-                    }
-                ],
-                stream=True,
+            debug_print("Starting text processing thread")
+            response = self.service.analyze(
+                self.text,
+                on_chunk=self.chunk_ready.emit,
+                cancelled=self.cancelled,
             )
 
-            for chunk in stream:
-                chunk_content = chunk["message"]["content"]
-                accumulated_response += chunk_content
-                self.chunk_ready.emit(chunk_content)
-                debug_print(f"Emitted chunk: {chunk_content[:50]}...")
-
-            return accumulated_response
-
+            if response and not self.cancelled.is_set():
+                debug_print("Processing completed successfully")
+                self.result_ready.emit(response)
+            elif not self.cancelled.is_set():
+                self.error_occurred.emit("No response received from AI model")
         except Exception as e:
-            debug_print(f"Ollama error: {str(e)}")
-            raise
-
-    def _process_with_gemini(self):
-        try:
-            debug_print("Initializing Gemini model")
-            model = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash")
-            prompt_template = """
-            Analyze the following text and provide a relevant explanation.
-            If the text appears to be from a casual context, provide a conversational response.
-            If the text is technical or formal, provide a concise, professional explanation.
-
-            Text to analyze: {text}
-            """
-            prompt = prompt_template.format(text=self.text)
-            message = HumanMessage(content=prompt)
-            response = model.stream([message])
-            result = "".join([r.content for r in response])
-            debug_print(f"Gemini response received: {result[:50]}...")
-            return result
-        except Exception as e:
-            debug_print(f"Gemini error: {str(e)}")
-            raise
+            if not self.cancelled.is_set():
+                debug_print(f"Text processing failed: {type(e).__name__}")
+                self.error_occurred.emit(safe_error_message(e))
 
 
 class StatusIndicatorWidget(QWidget):
@@ -211,11 +151,6 @@ class OverlayWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setup_ui()
         self.current_response = ""
-
-        # Create timer for reactivation
-        self.reactivation_timer = QTimer()
-        self.reactivation_timer.setSingleShot(True)
-        self.reactivation_timer.timeout.connect(self.reactivate_assistant)
 
         # Install event filter on the application instance
         QApplication.instance().installEventFilter(self)
@@ -422,16 +357,9 @@ class OverlayWidget(QWidget):
 
     def handle_close(self):
         debug_print("Close button clicked")
-        if hasattr(self, "parent") and hasattr(self.parent, "toggle_assistant"):
-            self.parent.toggle_assistant()  # Deactivate
-            debug_print("Starting 3-second timer for reactivation")
-            self.reactivation_timer.start(3000)  # 3000ms = 3 seconds
-
-    def reactivate_assistant(self):
-        debug_print("Reactivating assistant after delay")
-        if hasattr(self, "parent") and hasattr(self.parent, "toggle_assistant"):
-            if not self.parent.active:  # Only reactivate if currently inactive
-                self.parent.toggle_assistant()  # Reactivate
+        if hasattr(self, "parent") and hasattr(self.parent, "cancel_processing"):
+            self.parent.cancel_processing()
+        self.hide()
 
     def show(self):
         super().show()
@@ -460,7 +388,7 @@ class OverlayWidget(QWidget):
         self.response_label.setText(text)
 
     def append_chunk(self, chunk):
-        debug_print(f"Appending chunk: {chunk[:50]}...")
+        debug_print("Appending provider response chunk")
         self.current_response += chunk
         self.response_label.setText(self.current_response)
 
@@ -490,7 +418,7 @@ class AIAssistant(QMainWindow):
         self.overlay = OverlayWidget()
         self.overlay.parent = self
         self.setup_tray()
-        self.setup_clipboard_monitor()
+        self.setup_explicit_capture()
 
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -515,6 +443,11 @@ class AIAssistant(QMainWindow):
         # Add separator for visual clarity
         tray_menu.addSeparator()
 
+        analyze_action = tray_menu.addAction("Analyze clipboard now")
+        analyze_action.triggered.connect(self.analyze_clipboard)
+
+        tray_menu.addSeparator()
+
         exit_action = tray_menu.addAction("Exit")
         exit_action.triggered.connect(self.cleanup_and_exit)
 
@@ -522,30 +455,17 @@ class AIAssistant(QMainWindow):
         self.tray_icon.show()
         self.update_tray_tooltip()
 
-    def setup_clipboard_monitor(self):
-        debug_print("Setting up clipboard monitor")
+    def setup_explicit_capture(self):
+        debug_print("Setting up explicit clipboard capture")
         self.clipboard = QApplication.clipboard()
-        self.clipboard.dataChanged.connect(self.handle_clipboard_change)
-        self.clipboard.selectionChanged.connect(self.handle_selection_change)
-        keyboard.add_hotkey("ctrl+shift+space", self.toggle_assistant)
+        keyboard.add_hotkey("ctrl+shift+space", self.analyze_clipboard)
 
-    def handle_selection_change(self):
+    def analyze_clipboard(self):
         if not self.active:
             return
-
-        text = self.clipboard.text(mode=QApplication.clipboard().Selection)
-        if text and text.strip():
-            debug_print(f"Selection changed: {text[:50]}...")
-            self.process_text(text)
-
-    def handle_clipboard_change(self):
-        if not self.active:
-            return
-
         text = self.clipboard.text()
-        if text and text.strip():
-            debug_print(f"Clipboard changed: {text[:50]}...")
-            self.process_text(text)
+        debug_print("Explicit clipboard analysis requested")
+        self.process_text(text)
 
     def process_text(self, text):
         self.overlay.show()
@@ -555,10 +475,15 @@ class AIAssistant(QMainWindow):
     def start_processing(self, text):
         # Stop any existing text processor
         if self.text_processor is not None:
-            self.text_processor.stop()
+            if not self.text_processor.stop():
+                self.overlay.show_error(
+                    "The previous local request is still stopping. Please retry shortly."
+                )
+                return
             self.text_processor.deleteLater()
+            self.text_processor = None
 
-        self.text_processor = TextProcessor(text, use_gemini=True)
+        self.text_processor = TextProcessor(text, provider=OllamaProvider())
         self.text_processor.chunk_ready.connect(self.overlay.append_chunk)
         self.text_processor.result_ready.connect(self.handle_response)
         self.text_processor.error_occurred.connect(self.handle_error)
@@ -587,16 +512,27 @@ class AIAssistant(QMainWindow):
 
         # Cleanup the text processor after response is handled
         if self.text_processor is not None:
-            self.text_processor.stop()
-            self.text_processor.deleteLater()
-            self.text_processor = None
+            if self.text_processor.stop():
+                self.text_processor.deleteLater()
+                self.text_processor = None
+
+    def cancel_processing(self):
+        if self.text_processor is not None:
+            if self.text_processor.stop():
+                self.text_processor.deleteLater()
+                self.text_processor = None
 
     def cleanup_and_exit(self):
         debug_print("Cleaning up and exiting")
         # Stop the text processor if it exists
         if self.text_processor is not None:
-            self.text_processor.stop()
+            if not self.text_processor.stop():
+                self.overlay.show_error(
+                    "The local provider is still stopping. Please retry Exit shortly."
+                )
+                return
             self.text_processor.deleteLater()
+            self.text_processor = None
 
         keyboard.unhook_all()
         QApplication.quit()

@@ -23,14 +23,10 @@ tested on clean supported Windows environments.
 The developer preview targets Windows 11. Decide whether Windows 10 receives a supported period or
 whether the first release is Windows 11-only.
 
-## Capture behavior
+## Implemented product decisions
 
-Explicit user-invoked capture is now the only supported default. Decide whether passive clipboard
-monitoring should be removed permanently or return later as an advanced, visibly active opt-in
-mode. It must not return as the default.
-
-## Cloud provider
-
-Decide whether Gemini belongs in the first release or a later opt-in release. Before enabling it in
-the UI, implement provider choice, payload preview, explicit consent, credential storage and
-deletion, timeouts, cancellation, and fake-provider integration tests.
+The original automatic clipboard workflow is retained as a visibly active, session-only opt-in;
+explicit capture remains the default. Gemini is available through explicit provider selection,
+in-memory BYOK, visible provider state, a cloud-transmission confirmation, and a clear-key action.
+Release review should verify the wording and Windows interaction, but these are no longer missing
+functional capabilities.

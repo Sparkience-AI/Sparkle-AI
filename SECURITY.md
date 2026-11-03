@@ -18,7 +18,8 @@ fixes are applied to the latest default branch only.
 ## Security boundaries
 
 - Ollama is supported only on loopback by default.
-- Clipboard processing must be explicitly invoked.
+- Clipboard processing is explicit by default; automatic monitoring requires a session-only,
+  visibly checked opt-in and skips likely secrets heuristically.
 - Captured content and credentials must not appear in default logs.
-- Cloud routing is not enabled in the current UI.
+- Gemini cloud routing requires in-memory BYOK, visible provider state, and explicit consent.
 - Binary distribution is frozen pending the licensing and signing decisions.

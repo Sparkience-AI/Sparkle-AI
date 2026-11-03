@@ -64,4 +64,4 @@ def test_gemini_key_is_passed_directly_to_the_client() -> None:
 
     GeminiProvider("session-key", client_factory=factory)
 
-    assert calls == [{"model": "models/gemini-2.0-flash", "google_api_key": "session-key"}]
+    assert calls == [{"model": "gemini-3.8-flash", "google_api_key": "session-key"}]

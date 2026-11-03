@@ -13,16 +13,18 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QActionGroup, QColor, QCursor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QGraphicsOpacityEffect,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSystemTrayIcon,
@@ -32,7 +34,8 @@ from PyQt6.QtWidgets import (
 )
 
 from sparkle_ai.application import AnalysisService, safe_error_message
-from sparkle_ai.providers import OllamaProvider, TextProvider
+from sparkle_ai.capture import ClipboardMonitorState, ProviderMode, ProviderSelection
+from sparkle_ai.providers import GeminiProvider, OllamaProvider, TextProvider
 
 
 def debug_print(message):
@@ -149,6 +152,9 @@ class StatusIndicatorWidget(QWidget):
 
 
 class OverlayWidget(QWidget):
+    analysis_requested = pyqtSignal(str)
+    cancellation_requested = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.setWindowFlags(
@@ -256,6 +262,10 @@ class OverlayWidget(QWidget):
         self.layout.setSpacing(10)
 
         self.layout.addLayout(header_layout)
+
+        self.provider_label = QLabel("Provider: Local Ollama")
+        self.provider_label.setStyleSheet("color: #a8b3cf; font-size: 12px; padding: 2px;")
+        self.layout.addWidget(self.provider_label)
 
         # Processing indicator
         self.processing_label = AnimatedLabel("Processing...")
@@ -365,8 +375,7 @@ class OverlayWidget(QWidget):
 
     def handle_close(self):
         debug_print("Close button clicked")
-        if hasattr(self, "parent") and hasattr(self.parent, "cancel_processing"):
-            self.parent.cancel_processing()
+        self.cancellation_requested.emit()
         self.hide()
 
     def show(self):
@@ -395,6 +404,9 @@ class OverlayWidget(QWidget):
         self.current_response = text
         self.response_label.setText(text)
 
+    def set_provider(self, provider_name):
+        self.provider_label.setText(f"Provider: {provider_name}")
+
     def append_chunk(self, chunk):
         debug_print("Appending provider response chunk")
         self.current_response += chunk
@@ -411,9 +423,7 @@ class OverlayWidget(QWidget):
 
     def process_new_message(self, message):
         self.show_processing()
-        # Emit a signal to the main window to process the message
-        if hasattr(self, "parent") and hasattr(self.parent, "process_text"):
-            self.parent.process_text(message)
+        self.analysis_requested.emit(message)
 
 
 class CaptureBridge(QObject):
@@ -428,15 +438,23 @@ class AIAssistant(QMainWindow):
         self.active = True
         self.text_processor = None
         self.pending_text = None
+        self.pending_monitor_text = None
+        self.monitor_state = ClipboardMonitorState()
+        self.provider_selection = ProviderSelection()
         self.capture_bridge = CaptureBridge(self)
         self.capture_bridge.requested.connect(self.analyze_clipboard)
         self.start_timer = QTimer(self)
         self.start_timer.setSingleShot(True)
         self.start_timer.timeout.connect(self.start_pending_processing)
+        self.monitor_timer = QTimer(self)
+        self.monitor_timer.setSingleShot(True)
+        self.monitor_timer.setInterval(750)
+        self.monitor_timer.timeout.connect(self.analyze_monitored_clipboard)
 
         # Then create overlay and setup other components
         self.overlay = OverlayWidget()
-        self.overlay.parent = self
+        self.overlay.analysis_requested.connect(self.process_text)
+        self.overlay.cancellation_requested.connect(self.cancel_processing)
         self.setup_tray()
         self.setup_explicit_capture()
 
@@ -466,6 +484,27 @@ class AIAssistant(QMainWindow):
         analyze_action = tray_menu.addAction("Analyze clipboard now")
         analyze_action.triggered.connect(self.analyze_clipboard)
 
+        self.monitor_action = tray_menu.addAction("Monitor clipboard automatically")
+        self.monitor_action.setCheckable(True)
+        self.monitor_action.setChecked(False)
+        self.monitor_action.toggled.connect(self.set_passive_monitoring)
+
+        provider_menu = tray_menu.addMenu("Provider")
+        provider_group = QActionGroup(self)
+        provider_group.setExclusive(True)
+        self.ollama_action = provider_menu.addAction("Local Ollama")
+        self.ollama_action.setCheckable(True)
+        self.ollama_action.setChecked(True)
+        self.ollama_action.triggered.connect(self.select_ollama_provider)
+        provider_group.addAction(self.ollama_action)
+        self.gemini_action = provider_menu.addAction("Google Gemini (BYOK)")
+        self.gemini_action.setCheckable(True)
+        self.gemini_action.triggered.connect(self.select_gemini_provider)
+        provider_group.addAction(self.gemini_action)
+        provider_menu.addSeparator()
+        clear_key_action = provider_menu.addAction("Clear Gemini API key")
+        clear_key_action.triggered.connect(self.clear_gemini_key)
+
         tray_menu.addSeparator()
 
         exit_action = tray_menu.addAction("Exit")
@@ -478,7 +517,104 @@ class AIAssistant(QMainWindow):
     def setup_explicit_capture(self):
         debug_print("Setting up explicit clipboard capture")
         self.clipboard = QApplication.clipboard()
+        self.clipboard.dataChanged.connect(self.schedule_passive_capture)
         keyboard.add_hotkey("ctrl+shift+space", self.capture_bridge.requested.emit)
+
+    def set_passive_monitoring(self, enabled):
+        if enabled:
+            provider = self.provider_selection.display_name
+            consequence = (
+                "Every new clipboard text value will be sent automatically to "
+                f"{provider} after a short debounce."
+            )
+            if self.provider_selection.mode is ProviderMode.GEMINI:
+                consequence += " This transmits clipboard text to Google."
+            response = QMessageBox.question(
+                self,
+                "Enable automatic clipboard monitoring?",
+                consequence + "\n\nEnable monitoring until Sparkle AI exits?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if response is not QMessageBox.StandardButton.Yes:
+                self.monitor_action.blockSignals(True)
+                self.monitor_action.setChecked(False)
+                self.monitor_action.blockSignals(False)
+                return
+            self.monitor_state.enable(self.clipboard.text())
+        else:
+            self.monitor_state.disable()
+            self.monitor_timer.stop()
+            self.pending_monitor_text = None
+        self.update_tray_tooltip()
+
+    def schedule_passive_capture(self):
+        if not self.active or not self.monitor_state.enabled:
+            return
+        self.pending_monitor_text = self.clipboard.text()
+        self.monitor_timer.start()
+
+    def analyze_monitored_clipboard(self):
+        text = self.pending_monitor_text
+        self.pending_monitor_text = None
+        if not self.active or text is None:
+            return
+        accepted = self.monitor_state.accept(text)
+        if accepted is not None:
+            debug_print("Opt-in clipboard monitoring requested analysis")
+            self.process_text(accepted)
+        elif self.monitor_state.last_rejection:
+            self.tray_icon.showMessage(
+                "Sparkle AI skipped automatic capture",
+                self.monitor_state.last_rejection,
+                QSystemTrayIcon.MessageIcon.Warning,
+                4_000,
+            )
+
+    def select_ollama_provider(self):
+        self.provider_selection.use_ollama()
+        self.ollama_action.setChecked(True)
+        self.overlay.set_provider(self.provider_selection.display_name)
+        self.update_tray_tooltip()
+
+    def select_gemini_provider(self):
+        api_key, accepted = QInputDialog.getText(
+            self,
+            "Configure Google Gemini",
+            "Google API key (kept in memory until cleared or exit):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not api_key.strip():
+            self.ollama_action.setChecked(True)
+            return
+        monitoring_note = (
+            " Automatic monitoring is currently enabled, so future clipboard text will also be "
+            "sent automatically."
+            if self.monitor_state.enabled
+            else ""
+        )
+        response = QMessageBox.question(
+            self,
+            "Use Google Gemini?",
+            "Captured text and follow-up messages will be sent to Google using this key."
+            + monitoring_note
+            + "\n\nUse Gemini for this process session?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if response is not QMessageBox.StandardButton.Yes:
+            self.ollama_action.setChecked(True)
+            return
+        self.provider_selection.use_gemini(api_key, cloud_consent=True)
+        self.gemini_action.setChecked(True)
+        self.overlay.set_provider(self.provider_selection.display_name)
+        self.update_tray_tooltip()
+
+    def clear_gemini_key(self):
+        self.provider_selection.clear_gemini_key()
+        self.ollama_action.setChecked(True)
+        self.overlay.set_provider(self.provider_selection.display_name)
+        self.update_tray_tooltip()
 
     def analyze_clipboard(self):
         if not self.active:
@@ -511,7 +647,21 @@ class AIAssistant(QMainWindow):
             self.text_processor.deleteLater()
             self.text_processor = None
 
-        self.text_processor = TextProcessor(text, provider=OllamaProvider())
+        try:
+            if self.provider_selection.mode is ProviderMode.GEMINI:
+                api_key = self.provider_selection.gemini_api_key
+                if api_key is None:
+                    self.overlay.show_error("Configure a Google API key before using Gemini.")
+                    self.select_ollama_provider()
+                    return
+                provider: TextProvider = GeminiProvider(api_key)
+            else:
+                provider = OllamaProvider()
+        except Exception as error:
+            self.overlay.show_error(safe_error_message(error))
+            return
+        self.overlay.set_provider(self.provider_selection.display_name)
+        self.text_processor = TextProcessor(text, provider=provider)
         self.text_processor.chunk_ready.connect(self.overlay.append_chunk)
         self.text_processor.result_ready.connect(self.handle_response)
         self.text_processor.error_occurred.connect(self.handle_error)
@@ -529,10 +679,16 @@ class AIAssistant(QMainWindow):
         self.update_tray_tooltip()
         if not self.active:
             self.cancel_processing()
+            self.monitor_timer.stop()
+            self.pending_monitor_text = None
             self.overlay.hide()
 
     def update_tray_tooltip(self):
-        self.tray_icon.setToolTip(f"Sparkience: {'Active' if self.active else 'Inactive'}")
+        monitoring = "monitoring on" if self.monitor_state.enabled else "monitoring off"
+        self.tray_icon.setToolTip(
+            f"Sparkle AI: {'Active' if self.active else 'Inactive'} · "
+            f"{self.provider_selection.display_name} · {monitoring}"
+        )
 
     def handle_response(self, response):
         debug_print("Response received and processing complete")
@@ -548,14 +704,18 @@ class AIAssistant(QMainWindow):
 
     def cancel_processing(self):
         self.start_timer.stop()
+        self.monitor_timer.stop()
         self.pending_text = None
+        self.pending_monitor_text = None
         if self.text_processor is not None:
             self.text_processor.stop()
 
     def cleanup_and_exit(self):
         debug_print("Cleaning up and exiting")
         self.start_timer.stop()
+        self.monitor_timer.stop()
         self.pending_text = None
+        self.pending_monitor_text = None
         if self.text_processor is not None:
             self.text_processor.stop()
             if self.text_processor.isRunning():
@@ -567,6 +727,7 @@ class AIAssistant(QMainWindow):
             self.text_processor = None
 
         keyboard.unhook_all()
+        self.provider_selection.clear_gemini_key()
         QApplication.quit()
 
 

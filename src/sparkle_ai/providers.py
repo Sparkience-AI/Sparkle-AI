@@ -79,7 +79,7 @@ class GeminiProvider:
         self,
         api_key: str,
         *,
-        model: str = "models/gemini-2.0-flash",
+        model: str = "gemini-3.8-flash",
         client_factory: GeminiClientFactory | None = None,
     ) -> None:
         if not api_key.strip():

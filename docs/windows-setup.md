@@ -15,9 +15,16 @@ ollama pull llama3.2:3b
 uv run --locked sparkle-ai
 ```
 
+For Gemini provider choice, install the optional integration with
+`uv sync --locked --extra gemini`. Keys remain in process memory only.
+
 The global hotkey library may require permissions allowed by the local Windows security policy.
 If the hotkey conflicts with another application, exit Sparkle AI from the tray. Configurable
 hotkeys are planned but not yet implemented.
+
+Automatic monitoring is off at startup. Enable **Monitor clipboard automatically** from the tray
+only when the visible provider and clipboard contents are appropriate. The tray tooltip reports
+the active provider and monitoring state.
 
 ## Troubleshooting
 

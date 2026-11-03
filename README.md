@@ -1,8 +1,9 @@
 # Sparkle AI
 
-Sparkle AI is an experimental, privacy-first Windows desktop assistant for explicitly requested
-analysis of text currently in the clipboard. It sends text to a loopback Ollama service by default
-and does not monitor clipboard changes in the background.
+Sparkle AI is an experimental, privacy-first Windows desktop assistant for analyzing clipboard
+text through a local Ollama model or an explicitly selected Gemini BYOK session. It supports the
+original background clipboard workflow as a visibly enabled, session-only opt-in while retaining
+explicit hotkey and tray capture.
 
 > **Maturity:** pre-alpha developer preview. There is no supported binary installer yet. Do not
 > distribute a bundled application until the PyQt and project-license decision is resolved.
@@ -12,16 +13,17 @@ and does not monitor clipboard changes in the background.
 Sparkle AI currently supports:
 
 - User-invoked clipboard analysis with `Ctrl+Shift+Space` or the tray menu.
+- Optional automatic clipboard monitoring with visible tray state, debounce, deduplication, and
+  automatic rejection of likely credentials or oversized/binary content.
 - Loopback-only Ollama access at `127.0.0.1:11434`.
+- Runtime provider choice between local Ollama and Google Gemini 3.8 Flash. Gemini requires an
+  in-memory user API key and explicit cloud-transmission consent.
 - A bounded 20,000-character text payload.
 - Streaming output with cooperative cancellation between provider chunks.
 - A testable application core independent of the PyQt interface.
-- An optional Gemini adapter for future explicit cloud routing; it is not enabled by the desktop
-  interface in this release.
 
-Sparkle AI does **not** currently provide passive clipboard monitoring, persistent conversation
-history, credential storage, an installer, automatic updates, or a supported public/cloud-hosted
-version.
+Sparkle AI does **not** persist conversation history or credentials, install a background service,
+provide an installer or automatic updates, or offer a supported public/cloud-hosted version.
 
 ## Requirements
 
@@ -42,7 +44,17 @@ uv run --locked sparkle-ai
 ```
 
 Copy text, then press `Ctrl+Shift+Space`. The text is read only after that explicit action. Pause
-capture through the tray toggle and exit through the tray menu.
+capture through the tray toggle and exit through the tray menu. To restore the original automatic
+workflow, enable **Monitor clipboard automatically** in the tray and accept the session notice.
+
+Gemini is optional:
+
+```powershell
+uv sync --locked --extra gemini
+```
+
+Choose **Provider → Google Gemini (BYOK)**, enter a key, and approve cloud transmission. The key is
+kept only in process memory and can be cleared from the Provider menu.
 
 ## Privacy and provider behavior
 
@@ -51,16 +63,18 @@ default logs by Sparkle AI. Model behavior can still be incorrect, and text copi
 applications may contain secrets or malicious instructions. Review the exact clipboard contents
 before invoking analysis.
 
-The optional Gemini adapter requires the `gemini` extra and a key passed directly to the adapter.
-The current UI deliberately does not expose that route until provider choice, preview, consent,
-and credential-storage decisions are implemented. See [Privacy](docs/privacy.md).
+The Gemini route requires the `gemini` extra and a key passed directly to a session-owned client.
+The tray and overlay always show the active provider. Enabling automatic monitoring while Gemini
+is selected requires a separate warning because each accepted clipboard change is sent to Google.
+See [Privacy](docs/privacy.md).
 
 ## Architecture
 
 The packaged PyQt interface and testable logic live under `src/sparkle_ai`; the root `main.py`
 remains a source-checkout compatibility launcher:
 
-- `desktop.py`: GUI-thread bridge, tray/hotkey integration, overlay, and worker lifecycle.
+- `capture.py`: opt-in monitoring, deduplication, secret heuristics, and in-memory provider state.
+- `desktop.py`: GUI-thread bridge, tray/hotkey/monitor integration, overlay, and worker lifecycle.
 - `application.py`: input policy, cancellation boundary, and streaming orchestration.
 - `providers.py`: loopback Ollama and optional Gemini adapters.
 - `prompts.py`: versioned, injection-aware prompt construction.
@@ -84,7 +98,7 @@ package verification, not a signed installer or full GUI acceptance test.
 ## Security and support
 
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). This developer
-preview has no background service, telemetry, hosted demo, or binary release channel.
+preview has no persistent background service, telemetry, hosted demo, or binary release channel.
 
 ## License notice
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sparkle-ai"
 version = "0.1.0"
-description = "A privacy-first Windows assistant for explicit, local text analysis."
+description = "A privacy-first Windows clipboard assistant with local and BYOK AI providers."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = { file = "LICENSE" }
@@ -30,8 +30,8 @@ sparkle-ai = "sparkle_ai.desktop:main"
 
 [project.optional-dependencies]
 gemini = [
-  "langchain-core>=0.3,<2",
-  "langchain-google-genai>=2,<4",
+  "langchain-core>=1,<2",
+  "langchain-google-genai>=3,<4",
 ]
 
 [dependency-groups]

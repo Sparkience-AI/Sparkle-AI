@@ -3640,8 +3640,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "keyboard", specifier = ">=0.13.5,<1" },
-    { name = "langchain-core", marker = "extra == 'gemini'", specifier = ">=0.3,<2" },
-    { name = "langchain-google-genai", marker = "extra == 'gemini'", specifier = ">=2,<4" },
+    { name = "langchain-core", marker = "extra == 'gemini'", specifier = ">=1,<2" },
+    { name = "langchain-google-genai", marker = "extra == 'gemini'", specifier = ">=3,<4" },
     { name = "ollama", specifier = ">=0.3.3,<1" },
     { name = "pyqt6", specifier = ">=6.7,<7" },
 ]

@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.26,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sparkle-ai"
+version = "0.1.0"
+description = "A privacy-first Windows clipboard assistant with local and BYOK AI providers."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { file = "LICENSE" }
+authors = [{ name = "Nitin Sagar" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "keyboard>=0.13.5,<1",
+  "ollama>=0.3.3,<1",
+  "pyqt6>=6.7,<7",
+]
+
+[project.gui-scripts]
+sparkle-ai = "sparkle_ai.desktop:main"
+
+[project.optional-dependencies]
+gemini = [
+  "langchain-core>=1,<2",
+  "langchain-google-genai>=3,<4",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "ruff>=0.8,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sparkle_ai"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["sparkask in action.mp4"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -125,12 +125,17 @@ class OpenAIProvider:
         self._client = client_factory(api_key=api_key, timeout=timeout_seconds)
 
     def stream(self, prompt: str) -> Iterable[str]:
-        with self._client.responses.stream(
+        events = self._client.responses.create(
             model=self.model,
             input=prompt,
+            stream=True,
             store=False,
-        ) as stream:
-            yield from stream.text_deltas
+        )
+        for event in events:
+            if getattr(event, "type", None) == "response.output_text.delta":
+                delta = getattr(event, "delta", None)
+                if isinstance(delta, str) and delta:
+                    yield delta
 
 
 class AnthropicProvider:

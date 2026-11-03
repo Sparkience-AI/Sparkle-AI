@@ -73,23 +73,20 @@ def test_gemini_key_is_passed_directly_to_the_client() -> None:
     assert calls == [{"model": "gemini-3.8-flash", "google_api_key": "session-key"}]
 
 
-class FakeOpenAIStream:
-    text_deltas = iter(["first", "second"])
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        return None
-
-
 class FakeOpenAIResponses:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def stream(self, **kwargs):
+    def create(self, **kwargs):
         self.calls.append(kwargs)
-        return FakeOpenAIStream()
+        return [
+            type(
+                "Event",
+                (),
+                {"type": "response.output_text.delta", "delta": value},
+            )()
+            for value in ("first", "second")
+        ]
 
 
 class FakeOpenAIClient:
@@ -109,7 +106,9 @@ def test_openai_uses_responses_stream_without_server_storage() -> None:
 
     assert list(provider.stream("prompt")) == ["first", "second"]
     assert factory_calls == [{"api_key": "session-key", "timeout": 60.0}]
-    assert client.responses.calls == [{"model": "gpt-test", "input": "prompt", "store": False}]
+    assert client.responses.calls == [
+        {"model": "gpt-test", "input": "prompt", "stream": True, "store": False}
+    ]
 
 
 class FakeAnthropicStream:

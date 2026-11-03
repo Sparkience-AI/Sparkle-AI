@@ -604,6 +604,14 @@ class AIAssistant(QMainWindow):
     def select_anthropic_provider(self):
         self.select_cloud_provider(ProviderMode.ANTHROPIC)
 
+    def sync_provider_action(self):
+        {
+            ProviderMode.OLLAMA: self.ollama_action,
+            ProviderMode.GEMINI: self.gemini_action,
+            ProviderMode.OPENAI: self.openai_action,
+            ProviderMode.ANTHROPIC: self.anthropic_action,
+        }[self.provider_selection.mode].setChecked(True)
+
     def select_cloud_provider(self, mode):
         settings = {
             ProviderMode.GEMINI: ("Google Gemini", "Google API key"),
@@ -618,7 +626,7 @@ class AIAssistant(QMainWindow):
             QLineEdit.EchoMode.Password,
         )
         if not accepted or not api_key.strip():
-            self.ollama_action.setChecked(True)
+            self.sync_provider_action()
             return
         model, accepted = QInputDialog.getText(
             self,
@@ -628,7 +636,7 @@ class AIAssistant(QMainWindow):
             self.provider_selection.model_for(mode),
         )
         if not accepted or not model.strip():
-            self.ollama_action.setChecked(True)
+            self.sync_provider_action()
             return
         monitoring_note = (
             " Automatic monitoring is currently enabled, so future clipboard text will also be "
@@ -646,7 +654,7 @@ class AIAssistant(QMainWindow):
             QMessageBox.StandardButton.No,
         )
         if response is not QMessageBox.StandardButton.Yes:
-            self.ollama_action.setChecked(True)
+            self.sync_provider_action()
             return
         self.provider_selection.use_cloud(
             mode,
@@ -673,7 +681,7 @@ class AIAssistant(QMainWindow):
 
     def clear_cloud_key(self, mode):
         self.provider_selection.clear_key(mode)
-        self.ollama_action.setChecked(True)
+        self.sync_provider_action()
         self.overlay.set_provider(self.provider_selection.display_name)
         self.update_tray_tooltip()
 

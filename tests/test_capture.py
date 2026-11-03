@@ -51,3 +51,35 @@ def test_provider_selection_requires_key_and_cloud_consent() -> None:
     selection.clear_gemini_key()
     assert selection.mode is ProviderMode.OLLAMA
     assert selection.gemini_api_key is None
+
+
+@pytest.mark.parametrize(
+    ("mode", "model", "expected_name"),
+    [
+        (ProviderMode.GEMINI, "gemini-custom", "Google Gemini (cloud)"),
+        (ProviderMode.OPENAI, "gpt-custom", "OpenAI (cloud)"),
+        (ProviderMode.ANTHROPIC, "claude-custom", "Anthropic Claude (cloud)"),
+    ],
+)
+def test_cloud_provider_keys_and_models_are_session_state(
+    mode: ProviderMode, model: str, expected_name: str
+) -> None:
+    selection = ProviderSelection()
+    selection.use_cloud(mode, " session-key ", model=model, cloud_consent=True)
+
+    assert selection.mode is mode
+    assert selection.api_key_for(mode) == "session-key"
+    assert selection.model_for(mode) == model
+    assert selection.display_name == expected_name
+
+    selection.clear_key(mode)
+    assert selection.mode is ProviderMode.OLLAMA
+    assert selection.api_key_for(mode) is None
+
+
+def test_cloud_provider_rejects_blank_model_and_local_mode() -> None:
+    selection = ProviderSelection()
+    with pytest.raises(ProviderSelectionError, match="model identifier"):
+        selection.use_cloud(ProviderMode.OPENAI, "session-key", model=" ", cloud_consent=True)
+    with pytest.raises(ProviderSelectionError, match="supported cloud"):
+        selection.use_cloud(ProviderMode.OLLAMA, "session-key", model="local", cloud_consent=True)

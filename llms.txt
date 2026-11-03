@@ -1,0 +1,20 @@
+# Sparkle AI
+
+> Privacy-first Windows clipboard assistant with local Ollama and optional BYOK cloud providers.
+
+Sparkle AI analyzes user-selected clipboard text or, after explicit session consent, debounced
+clipboard changes. Local Ollama is the default. Google Gemini, OpenAI, and Anthropic Claude are
+optional, user-selected cloud routes with in-memory credentials and visible provider state.
+
+## Canonical documentation
+
+- README.md: product boundary, setup, provider choices, and development workflow
+- docs/privacy.md: capture modes, cloud transmission, credential handling, and retention
+- docs/architecture.md: application and provider trust boundaries
+- docs/windows-setup.md: supported local setup and troubleshooting
+- SECURITY.md: vulnerability reporting and security boundaries
+
+## Safety boundary
+
+The application has no autonomous tools, filesystem authority, telemetry, hosted backend, or
+persistent credential store. Clipboard text is untrusted and secret detection is heuristic.

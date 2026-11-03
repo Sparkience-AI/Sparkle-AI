@@ -1,6 +1,12 @@
 import pytest
 
-from sparkle_ai.providers import EndpointPolicyError, GeminiProvider, OllamaProvider
+from sparkle_ai.providers import (
+    AnthropicProvider,
+    EndpointPolicyError,
+    GeminiProvider,
+    OllamaProvider,
+    OpenAIProvider,
+)
 
 
 class FakeOllamaClient:
@@ -65,3 +71,93 @@ def test_gemini_key_is_passed_directly_to_the_client() -> None:
     GeminiProvider("session-key", client_factory=factory)
 
     assert calls == [{"model": "gemini-3.8-flash", "google_api_key": "session-key"}]
+
+
+class FakeOpenAIStream:
+    text_deltas = iter(["first", "second"])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+
+class FakeOpenAIResponses:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def stream(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeOpenAIStream()
+
+
+class FakeOpenAIClient:
+    def __init__(self) -> None:
+        self.responses = FakeOpenAIResponses()
+
+
+def test_openai_uses_responses_stream_without_server_storage() -> None:
+    client = FakeOpenAIClient()
+    factory_calls: list[dict[str, object]] = []
+
+    def factory(**kwargs):
+        factory_calls.append(kwargs)
+        return client
+
+    provider = OpenAIProvider("session-key", model="gpt-test", client_factory=factory)
+
+    assert list(provider.stream("prompt")) == ["first", "second"]
+    assert factory_calls == [{"api_key": "session-key", "timeout": 60.0}]
+    assert client.responses.calls == [{"model": "gpt-test", "input": "prompt", "store": False}]
+
+
+class FakeAnthropicStream:
+    text_stream = iter(["first", "second"])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+
+class FakeAnthropicMessages:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def stream(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeAnthropicStream()
+
+
+class FakeAnthropicClient:
+    def __init__(self) -> None:
+        self.messages = FakeAnthropicMessages()
+
+
+def test_anthropic_uses_messages_text_stream() -> None:
+    client = FakeAnthropicClient()
+    factory_calls: list[dict[str, object]] = []
+
+    def factory(**kwargs):
+        factory_calls.append(kwargs)
+        return client
+
+    provider = AnthropicProvider("session-key", model="claude-test", client_factory=factory)
+
+    assert list(provider.stream("prompt")) == ["first", "second"]
+    assert factory_calls == [{"api_key": "session-key", "timeout": 60.0}]
+    assert client.messages.calls == [
+        {
+            "model": "claude-test",
+            "max_tokens": 2_048,
+            "messages": [{"role": "user", "content": "prompt"}],
+        }
+    ]
+
+
+@pytest.mark.parametrize("provider", [OpenAIProvider, AnthropicProvider])
+def test_cloud_providers_require_explicit_keys(provider) -> None:
+    with pytest.raises(ValueError, match="API key"):
+        provider(" ", client_factory=lambda **_: object())

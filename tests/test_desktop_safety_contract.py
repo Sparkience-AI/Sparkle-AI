@@ -23,8 +23,16 @@ def test_overlay_follow_up_and_close_use_gui_thread_signals() -> None:
     assert "self.cancellation_requested.emit()" in MAIN_SOURCE
 
 
-def test_runtime_does_not_mutate_process_global_google_key() -> None:
+def test_runtime_does_not_mutate_process_global_cloud_keys() -> None:
     assert "os.environ" not in MAIN_SOURCE
+
+
+def test_cloud_providers_are_explicit_byok_choices() -> None:
+    assert 'provider_menu.addAction("Google Gemini (BYOK)")' in MAIN_SOURCE
+    assert 'provider_menu.addAction("OpenAI (BYOK)")' in MAIN_SOURCE
+    assert 'provider_menu.addAction("Anthropic Claude (BYOK)")' in MAIN_SOURCE
+    assert "self.provider_selection.use_cloud(" in MAIN_SOURCE
+    assert "cloud_consent=True" in MAIN_SOURCE
 
 
 def test_runtime_does_not_log_captured_text_or_response_chunks() -> None:

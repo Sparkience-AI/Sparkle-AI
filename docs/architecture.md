@@ -13,7 +13,9 @@ Packaged PyQt interface (`sparkle_ai.desktop`)
 InputPolicy -> AnalysisService -> TextProvider
                                    |
                                    +-- OllamaProvider (default, loopback)
-                                   `-- GeminiProvider (opt-in, in-memory BYOK)
+                                   +-- GeminiProvider (opt-in, in-memory BYOK)
+                                   +-- OpenAIProvider (Responses API, store=false)
+                                   `-- AnthropicProvider (Messages API)
 ```
 
 ## Trust boundaries

@@ -19,15 +19,20 @@ service or start at login.
 - **Google Gemini (opt-in):** the user installs the optional dependency, enters their own key, and
   confirms that captured text and follow-up messages will be sent to Google. The active cloud
   provider is visible in the tray tooltip and overlay.
+- **OpenAI (opt-in):** the user supplies an OpenAI key and model. Requests use the Responses API
+  with response storage disabled by Sparkle AI.
+- **Anthropic Claude (opt-in):** the user supplies an Anthropic key and model. Requests use the
+  streaming Messages API.
 
 Sparkle AI does not intentionally persist captured text, prompts, or responses. It does not log
 their contents by default. Ollama and the selected local model have their own behavior and should
 be configured and audited separately.
 
-The Gemini key is passed directly to the provider client, retained only in process memory, and
-removed by **Clear Gemini API key** or application exit. It is never copied into a process-global
-environment variable or application log. Selecting Gemini and enabling automatic monitoring are
-separate consent decisions.
+Cloud keys are passed directly to their provider clients, retained only in process memory, and
+removed by the matching **Clear … API key** action or application exit. They are never copied into
+a process-global environment variable or application log. Selecting a provider and enabling
+automatic monitoring are separate consent decisions. Provider-side retention and account policy
+remain governed by the selected provider and the user's account configuration.
 
 ## Retention and deletion
 

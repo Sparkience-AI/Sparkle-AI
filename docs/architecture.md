@@ -37,4 +37,5 @@ a packaging move, not a PyQt/PySide rewrite. A Qt signal bridge marshals the glo
 onto the GUI thread, while a cancellable Qt timer owns deferred request starts. Unit tests target
 the bridge, monitoring/provider state, extracted core, overlay follow-up signal, and fake-provider
 behavior. CI installs all optional providers, then builds and smoke-tests the installed launcher on
-Windows, while clean-VM GUI, hotkey, live-provider, signing, and installer tests remain release gates.
+Windows. Clean-environment GUI, hotkey, and explicitly approved live-provider tests remain release
+checks. Release evidence covers the source archive and Python wheel.

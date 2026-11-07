@@ -5,8 +5,7 @@ text through local Ollama or an explicitly selected Gemini, OpenAI, or Anthropic
 original background clipboard workflow as a visibly enabled, session-only opt-in while retaining
 explicit hotkey and tray capture.
 
-> **Maturity:** pre-alpha developer preview. There is no supported binary installer yet. Do not
-> distribute a bundled application until the PyQt and project-license decision is resolved.
+> **Maturity:** pre-alpha source-run developer preview.
 
 ## Current product boundary
 
@@ -23,7 +22,7 @@ Sparkle AI currently supports:
 - A testable application core independent of the PyQt interface.
 
 Sparkle AI does **not** persist conversation history or credentials, install a background service,
-provide an installer or automatic updates, or offer a supported public/cloud-hosted version.
+provide automatic updates, or offer a supported public/cloud-hosted version.
 
 ## Requirements
 
@@ -82,7 +81,11 @@ remains a source-checkout compatibility launcher:
 - `providers.py`: loopback Ollama plus optional Gemini, OpenAI Responses, and Anthropic Messages adapters.
 - `prompts.py`: versioned, injection-aware prompt construction.
 
-See [Architecture](docs/architecture.md) and [Open decisions](docs/decisions-needed.md).
+See [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md), and
+[Release checklist](docs/release-checklist.md).
+
+Operational boundaries are documented in the [performance envelope](docs/performance.md) and
+[accessibility contract](docs/accessibility.md).
 
 ## Development
 
@@ -95,16 +98,15 @@ uv build --no-sources
 ```
 
 Normal tests use fake providers and do not require Ollama, cloud API keys, or network
-access. CI also builds and smoke-tests the installed Windows launcher on Python 3.11–3.13. This is
-package verification, not a signed installer or full GUI acceptance test.
+access. CI also builds and smoke-tests the source-installed Windows launcher on Python 3.11–3.13.
 
 ## Security and support
 
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). This developer
-preview has no persistent background service, telemetry, hosted demo, or binary release channel.
+preview has no persistent background service, telemetry, or hosted demo.
 
 ## License notice
 
-The repository currently contains a GPL-2.0 license while PyQt6 is distributed under GPLv3 or a
-commercial license. This combination requires a documented licensing review. The project is not
-claiming that its current metadata is ready for binary redistribution.
+The repository currently contains a GPL-2.0 license while PyQt6 has separate licensing terms.
+Contributors must review compatibility before changing dependencies or redistribution terms;
+Sparkle AI is distributed and verified here as source-run software only.

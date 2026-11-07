@@ -48,6 +48,18 @@ def test_overlay_follow_up_and_close_emit_gui_signals() -> None:
     assert app is not None
 
 
+def test_overlay_controls_have_accessible_names() -> None:
+    app = QApplication.instance() or QApplication([])
+    overlay = OverlayWidget()
+    assert overlay.close_button.accessibleName() == "Close assistant overlay"
+    assert overlay.provider_label.accessibleName() == "Active provider"
+    assert overlay.response_label.accessibleName() == "AI response"
+    assert overlay.error_label.accessibleName() == "Provider error"
+    assert overlay.chat_input.accessibleName() == "Follow-up message"
+    assert overlay.send_button.accessibleName() == "Send follow-up"
+    assert app is not None
+
+
 def test_packaged_entry_point_reports_version_without_starting_qt(capsys) -> None:
     from sparkle_ai.desktop import main
 

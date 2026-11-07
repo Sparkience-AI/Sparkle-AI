@@ -38,5 +38,5 @@ the active provider and monitoring state.
 - **Cloud provider unavailable:** install its matching optional extra, verify the model identifier
   is available to the API account, and re-enter the session key.
 
-There is no supported installer, signing certificate, automatic update channel, or Windows 10
-compatibility claim in this preview.
+Sparkle AI is intentionally source-run. Automatic updates and Windows 10 compatibility are not
+claimed in this preview.

@@ -15,7 +15,7 @@ jobs:
       python-version: "3.12"
       run-type-check: false
 
-  windows-package:
+  windows-source-validation:
     runs-on: windows-latest
     strategy:
       matrix:
@@ -30,7 +30,7 @@ jobs:
         run: |
           uv sync --locked --all-groups --all-extras
           uv run --locked --all-extras pytest -q
-      - name: Build distributions
+      - name: Build source and wheel distributions
         run: uv build --no-sources
       - name: Smoke-test installed wheel
         shell: pwsh

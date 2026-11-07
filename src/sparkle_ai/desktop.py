@@ -125,11 +125,13 @@ class StatusIndicatorWidget(QWidget):
 
         # Create indicator
         self.indicator = QLabel()
+        self.indicator.setAccessibleName("Assistant status")
         self.indicator.setFixedSize(8, 8)
         self.update_status(active)
 
         # Create text label
         self.text_label = QLabel(text)
+        self.text_label.setAccessibleName("Assistant toggle label")
 
         layout.addWidget(self.indicator)
         layout.addWidget(self.text_label)
@@ -258,6 +260,8 @@ class OverlayWidget(QWidget):
 
         # Close button
         self.close_button = QPushButton("×")
+        self.close_button.setAccessibleName("Close assistant overlay")
+        self.close_button.setToolTip("Close and cancel the current request")
         self.close_button.setObjectName("closeButton")
         self.close_button.setFixedSize(30, 30)
         self.close_button.clicked.connect(self.handle_close)
@@ -270,11 +274,13 @@ class OverlayWidget(QWidget):
         self.layout.addLayout(header_layout)
 
         self.provider_label = QLabel("Provider: Local Ollama")
+        self.provider_label.setAccessibleName("Active provider")
         self.provider_label.setStyleSheet("color: #a8b3cf; font-size: 12px; padding: 2px;")
         self.layout.addWidget(self.provider_label)
 
         # Processing indicator
         self.processing_label = AnimatedLabel("Processing...")
+        self.processing_label.setAccessibleName("Processing status")
         self.processing_label.setStyleSheet("""
             color: #64ffda;
             font-size: 14px;
@@ -294,6 +300,7 @@ class OverlayWidget(QWidget):
 
         # Response text area
         self.response_label = QLabel()
+        self.response_label.setAccessibleName("AI response")
         self.response_label.setWordWrap(True)
         self.response_label.setStyleSheet("""
             color: #e4e4e4;
@@ -309,6 +316,7 @@ class OverlayWidget(QWidget):
 
         # Error label
         self.error_label = QLabel()
+        self.error_label.setAccessibleName("Provider error")
         self.error_label.setStyleSheet("""
             color: #ff6b6b;
             font-size: 14px;
@@ -324,11 +332,14 @@ class OverlayWidget(QWidget):
 
         # Chat input field
         self.chat_input = QLineEdit()
+        self.chat_input.setAccessibleName("Follow-up message")
+        self.chat_input.setAccessibleDescription("Enter a follow-up about the current response")
         self.chat_input.setPlaceholderText("Type your message...")
         self.chat_input.returnPressed.connect(self.send_message)
 
         # Send button
         self.send_button = QPushButton("Send")
+        self.send_button.setAccessibleName("Send follow-up")
         self.send_button.setFixedSize(70, 36)
         self.send_button.clicked.connect(self.send_message)
 

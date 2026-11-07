@@ -33,6 +33,12 @@ gemini = [
   "langchain-core>=1,<2",
   "langchain-google-genai>=3,<4",
 ]
+openai = [
+  "openai>=2,<3",
+]
+anthropic = [
+  "anthropic>=1,<2",
+]
 
 [dependency-groups]
 dev = [

@@ -14,6 +14,8 @@ class TextProvider(Protocol):
 
 OllamaClientFactory = Callable[..., Any]
 GeminiClientFactory = Callable[..., Any]
+OpenAIClientFactory = Callable[..., Any]
+AnthropicClientFactory = Callable[..., Any]
 
 
 class EndpointPolicyError(ValueError):
@@ -88,6 +90,7 @@ class GeminiProvider:
             from langchain_google_genai import ChatGoogleGenerativeAI
 
             client_factory = ChatGoogleGenerativeAI
+        self.model = model
         self._client = client_factory(model=model, google_api_key=api_key)
 
     def stream(self, prompt: str) -> Iterable[str]:
@@ -97,3 +100,74 @@ class GeminiProvider:
             content = getattr(chunk, "content", "")
             if content:
                 yield str(content)
+
+
+class OpenAIProvider:
+    """OpenAI Responses API adapter configured with a session-owned key."""
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        model: str = "gpt-6-luna",
+        timeout_seconds: float = 60.0,
+        client_factory: OpenAIClientFactory | None = None,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("An OpenAI API key is required.")
+        if not model.strip():
+            raise ValueError("An OpenAI model is required.")
+        if client_factory is None:
+            from openai import OpenAI
+
+            client_factory = OpenAI
+        self.model = model
+        self._client = client_factory(api_key=api_key, timeout=timeout_seconds)
+
+    def stream(self, prompt: str) -> Iterable[str]:
+        events = self._client.responses.create(
+            model=self.model,
+            input=prompt,
+            stream=True,
+            store=False,
+        )
+        for event in events:
+            if getattr(event, "type", None) == "response.output_text.delta":
+                delta = getattr(event, "delta", None)
+                if isinstance(delta, str) and delta:
+                    yield delta
+
+
+class AnthropicProvider:
+    """Anthropic Messages API adapter configured with a session-owned key."""
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        model: str = "claude-sonnet-5-5",
+        max_tokens: int = 2_048,
+        timeout_seconds: float = 60.0,
+        client_factory: AnthropicClientFactory | None = None,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("An Anthropic API key is required.")
+        if not model.strip():
+            raise ValueError("An Anthropic model is required.")
+        if max_tokens < 1:
+            raise ValueError("Anthropic max_tokens must be positive.")
+        if client_factory is None:
+            from anthropic import Anthropic
+
+            client_factory = Anthropic
+        self.model = model
+        self.max_tokens = max_tokens
+        self._client = client_factory(api_key=api_key, timeout=timeout_seconds)
+
+    def stream(self, prompt: str) -> Iterable[str]:
+        with self._client.messages.stream(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            yield from stream.text_stream

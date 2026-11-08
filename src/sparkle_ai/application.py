@@ -17,6 +17,7 @@ class InputPolicy:
     """Limits for text accepted by the desktop application."""
 
     max_characters: int = 20_000
+    max_response_characters: int = 20_000
 
     def validate(self, text: str) -> str:
         normalized = text.strip()
@@ -51,11 +52,15 @@ class AnalysisService:
             return ""
 
         result: list[str] = []
+        response_characters = 0
         for chunk in self._provider.stream(build_analysis_prompt(validated)):
             if cancellation.is_set():
                 break
             if not chunk:
                 continue
+            response_characters += len(chunk)
+            if response_characters > self._policy.max_response_characters:
+                raise InputRejectedError("Provider output exceeded the configured response limit.")
             result.append(chunk)
             if on_chunk is not None:
                 on_chunk(chunk)

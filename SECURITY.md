@@ -12,7 +12,7 @@ acknowledge the report, assess affected versions, and coordinate disclosure when
 
 ## Supported versions
 
-Sparkle AI is currently a pre-alpha developer preview with no supported binary release. Security
+Sparkle AI is currently a pre-alpha source-run developer preview. Security
 fixes are applied to the latest default branch only.
 
 ## Security boundaries
@@ -21,5 +21,5 @@ fixes are applied to the latest default branch only.
 - Clipboard processing is explicit by default; automatic monitoring requires a session-only,
   visibly checked opt-in and skips likely secrets heuristically.
 - Captured content and credentials must not appear in default logs.
-- Gemini cloud routing requires in-memory BYOK, visible provider state, and explicit consent.
-- Binary distribution is frozen pending the licensing and signing decisions.
+- Gemini, OpenAI, and Anthropic cloud routing require in-memory BYOK, visible provider state, and
+  explicit consent.

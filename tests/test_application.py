@@ -68,6 +68,12 @@ def test_input_policy_rejects_oversized_content() -> None:
         InputPolicy(max_characters=10).validate("x" * 11)
 
 
+def test_analysis_rejects_oversized_provider_output() -> None:
+    provider = FakeProvider(["123", "456"])
+    with pytest.raises(InputRejectedError, match="response limit"):
+        AnalysisService(provider, policy=InputPolicy(max_response_characters=5)).analyze("text")
+
+
 def test_safe_error_message_does_not_expose_provider_exception_details() -> None:
     message = safe_error_message(RuntimeError("request failed with secret-key"))
 

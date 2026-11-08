@@ -35,7 +35,13 @@ from PyQt6.QtWidgets import (
 
 from sparkle_ai.application import AnalysisService, safe_error_message
 from sparkle_ai.capture import ClipboardMonitorState, ProviderMode, ProviderSelection
-from sparkle_ai.providers import GeminiProvider, OllamaProvider, TextProvider
+from sparkle_ai.providers import (
+    AnthropicProvider,
+    GeminiProvider,
+    OllamaProvider,
+    OpenAIProvider,
+    TextProvider,
+)
 
 
 def debug_print(message):
@@ -119,11 +125,13 @@ class StatusIndicatorWidget(QWidget):
 
         # Create indicator
         self.indicator = QLabel()
+        self.indicator.setAccessibleName("Assistant status")
         self.indicator.setFixedSize(8, 8)
         self.update_status(active)
 
         # Create text label
         self.text_label = QLabel(text)
+        self.text_label.setAccessibleName("Assistant toggle label")
 
         layout.addWidget(self.indicator)
         layout.addWidget(self.text_label)
@@ -252,6 +260,8 @@ class OverlayWidget(QWidget):
 
         # Close button
         self.close_button = QPushButton("×")
+        self.close_button.setAccessibleName("Close assistant overlay")
+        self.close_button.setToolTip("Close and cancel the current request")
         self.close_button.setObjectName("closeButton")
         self.close_button.setFixedSize(30, 30)
         self.close_button.clicked.connect(self.handle_close)
@@ -264,11 +274,13 @@ class OverlayWidget(QWidget):
         self.layout.addLayout(header_layout)
 
         self.provider_label = QLabel("Provider: Local Ollama")
+        self.provider_label.setAccessibleName("Active provider")
         self.provider_label.setStyleSheet("color: #a8b3cf; font-size: 12px; padding: 2px;")
         self.layout.addWidget(self.provider_label)
 
         # Processing indicator
         self.processing_label = AnimatedLabel("Processing...")
+        self.processing_label.setAccessibleName("Processing status")
         self.processing_label.setStyleSheet("""
             color: #64ffda;
             font-size: 14px;
@@ -288,6 +300,7 @@ class OverlayWidget(QWidget):
 
         # Response text area
         self.response_label = QLabel()
+        self.response_label.setAccessibleName("AI response")
         self.response_label.setWordWrap(True)
         self.response_label.setStyleSheet("""
             color: #e4e4e4;
@@ -303,6 +316,7 @@ class OverlayWidget(QWidget):
 
         # Error label
         self.error_label = QLabel()
+        self.error_label.setAccessibleName("Provider error")
         self.error_label.setStyleSheet("""
             color: #ff6b6b;
             font-size: 14px;
@@ -318,11 +332,14 @@ class OverlayWidget(QWidget):
 
         # Chat input field
         self.chat_input = QLineEdit()
+        self.chat_input.setAccessibleName("Follow-up message")
+        self.chat_input.setAccessibleDescription("Enter a follow-up about the current response")
         self.chat_input.setPlaceholderText("Type your message...")
         self.chat_input.returnPressed.connect(self.send_message)
 
         # Send button
         self.send_button = QPushButton("Send")
+        self.send_button.setAccessibleName("Send follow-up")
         self.send_button.setFixedSize(70, 36)
         self.send_button.clicked.connect(self.send_message)
 
@@ -501,9 +518,21 @@ class AIAssistant(QMainWindow):
         self.gemini_action.setCheckable(True)
         self.gemini_action.triggered.connect(self.select_gemini_provider)
         provider_group.addAction(self.gemini_action)
+        self.openai_action = provider_menu.addAction("OpenAI (BYOK)")
+        self.openai_action.setCheckable(True)
+        self.openai_action.triggered.connect(self.select_openai_provider)
+        provider_group.addAction(self.openai_action)
+        self.anthropic_action = provider_menu.addAction("Anthropic Claude (BYOK)")
+        self.anthropic_action.setCheckable(True)
+        self.anthropic_action.triggered.connect(self.select_anthropic_provider)
+        provider_group.addAction(self.anthropic_action)
         provider_menu.addSeparator()
-        clear_key_action = provider_menu.addAction("Clear Gemini API key")
-        clear_key_action.triggered.connect(self.clear_gemini_key)
+        clear_gemini_action = provider_menu.addAction("Clear Gemini API key")
+        clear_gemini_action.triggered.connect(self.clear_gemini_key)
+        clear_openai_action = provider_menu.addAction("Clear OpenAI API key")
+        clear_openai_action.triggered.connect(self.clear_openai_key)
+        clear_anthropic_action = provider_menu.addAction("Clear Anthropic API key")
+        clear_anthropic_action.triggered.connect(self.clear_anthropic_key)
 
         tray_menu.addSeparator()
 
@@ -527,8 +556,8 @@ class AIAssistant(QMainWindow):
                 "Every new clipboard text value will be sent automatically to "
                 f"{provider} after a short debounce."
             )
-            if self.provider_selection.mode is ProviderMode.GEMINI:
-                consequence += " This transmits clipboard text to Google."
+            if self.provider_selection.mode is not ProviderMode.OLLAMA:
+                consequence += " This transmits clipboard text to the selected cloud provider."
             response = QMessageBox.question(
                 self,
                 "Enable automatic clipboard monitoring?",
@@ -578,14 +607,47 @@ class AIAssistant(QMainWindow):
         self.update_tray_tooltip()
 
     def select_gemini_provider(self):
+        self.select_cloud_provider(ProviderMode.GEMINI)
+
+    def select_openai_provider(self):
+        self.select_cloud_provider(ProviderMode.OPENAI)
+
+    def select_anthropic_provider(self):
+        self.select_cloud_provider(ProviderMode.ANTHROPIC)
+
+    def sync_provider_action(self):
+        {
+            ProviderMode.OLLAMA: self.ollama_action,
+            ProviderMode.GEMINI: self.gemini_action,
+            ProviderMode.OPENAI: self.openai_action,
+            ProviderMode.ANTHROPIC: self.anthropic_action,
+        }[self.provider_selection.mode].setChecked(True)
+
+    def select_cloud_provider(self, mode):
+        settings = {
+            ProviderMode.GEMINI: ("Google Gemini", "Google API key"),
+            ProviderMode.OPENAI: ("OpenAI", "OpenAI API key"),
+            ProviderMode.ANTHROPIC: ("Anthropic Claude", "Anthropic API key"),
+        }
+        provider_name, key_label = settings[mode]
         api_key, accepted = QInputDialog.getText(
             self,
-            "Configure Google Gemini",
-            "Google API key (kept in memory until cleared or exit):",
+            f"Configure {provider_name}",
+            f"{key_label} (kept in memory until cleared or exit):",
             QLineEdit.EchoMode.Password,
         )
         if not accepted or not api_key.strip():
-            self.ollama_action.setChecked(True)
+            self.sync_provider_action()
+            return
+        model, accepted = QInputDialog.getText(
+            self,
+            f"Choose {provider_name} model",
+            "Model identifier:",
+            QLineEdit.EchoMode.Normal,
+            self.provider_selection.model_for(mode),
+        )
+        if not accepted or not model.strip():
+            self.sync_provider_action()
             return
         monitoring_note = (
             " Automatic monitoring is currently enabled, so future clipboard text will also be "
@@ -595,24 +657,42 @@ class AIAssistant(QMainWindow):
         )
         response = QMessageBox.question(
             self,
-            "Use Google Gemini?",
-            "Captured text and follow-up messages will be sent to Google using this key."
+            f"Use {provider_name}?",
+            f"Captured text and follow-up messages will be sent to {provider_name} using this key."
             + monitoring_note
-            + "\n\nUse Gemini for this process session?",
+            + f"\n\nUse {provider_name} for this process session?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if response is not QMessageBox.StandardButton.Yes:
-            self.ollama_action.setChecked(True)
+            self.sync_provider_action()
             return
-        self.provider_selection.use_gemini(api_key, cloud_consent=True)
-        self.gemini_action.setChecked(True)
+        self.provider_selection.use_cloud(
+            mode,
+            api_key,
+            model=model,
+            cloud_consent=True,
+        )
+        {
+            ProviderMode.GEMINI: self.gemini_action,
+            ProviderMode.OPENAI: self.openai_action,
+            ProviderMode.ANTHROPIC: self.anthropic_action,
+        }[mode].setChecked(True)
         self.overlay.set_provider(self.provider_selection.display_name)
         self.update_tray_tooltip()
 
     def clear_gemini_key(self):
-        self.provider_selection.clear_gemini_key()
-        self.ollama_action.setChecked(True)
+        self.clear_cloud_key(ProviderMode.GEMINI)
+
+    def clear_openai_key(self):
+        self.clear_cloud_key(ProviderMode.OPENAI)
+
+    def clear_anthropic_key(self):
+        self.clear_cloud_key(ProviderMode.ANTHROPIC)
+
+    def clear_cloud_key(self, mode):
+        self.provider_selection.clear_key(mode)
+        self.sync_provider_action()
         self.overlay.set_provider(self.provider_selection.display_name)
         self.update_tray_tooltip()
 
@@ -648,13 +728,22 @@ class AIAssistant(QMainWindow):
             self.text_processor = None
 
         try:
-            if self.provider_selection.mode is ProviderMode.GEMINI:
-                api_key = self.provider_selection.gemini_api_key
+            mode = self.provider_selection.mode
+            if mode is not ProviderMode.OLLAMA:
+                api_key = self.provider_selection.api_key_for(mode)
                 if api_key is None:
-                    self.overlay.show_error("Configure a Google API key before using Gemini.")
+                    self.overlay.show_error(
+                        "Configure an API key before using this cloud provider."
+                    )
                     self.select_ollama_provider()
                     return
-                provider: TextProvider = GeminiProvider(api_key)
+                model = self.provider_selection.model_for(mode)
+                if mode is ProviderMode.GEMINI:
+                    provider: TextProvider = GeminiProvider(api_key, model=model)
+                elif mode is ProviderMode.OPENAI:
+                    provider = OpenAIProvider(api_key, model=model)
+                else:
+                    provider = AnthropicProvider(api_key, model=model)
             else:
                 provider = OllamaProvider()
         except Exception as error:
@@ -727,7 +816,7 @@ class AIAssistant(QMainWindow):
             self.text_processor = None
 
         keyboard.unhook_all()
-        self.provider_selection.clear_gemini_key()
+        self.provider_selection.clear_all_cloud_keys()
         QApplication.quit()
 
 

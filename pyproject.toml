@@ -54,6 +54,7 @@ exclude = ["sparkask in action.mp4"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]

@@ -60,9 +60,7 @@ class AnalysisService:
                 continue
             response_characters += len(chunk)
             if response_characters > self._policy.max_response_characters:
-                raise InputRejectedError(
-                    "Provider output exceeded the configured response limit."
-                )
+                raise InputRejectedError("Provider output exceeded the configured response limit.")
             result.append(chunk)
             if on_chunk is not None:
                 on_chunk(chunk)

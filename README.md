@@ -19,6 +19,8 @@ Sparkle AI currently supports:
   Claude. Cloud routes require an in-memory user API key and explicit transmission consent.
 - A bounded 20,000-character text payload.
 - Streaming output with cooperative cancellation between provider chunks.
+- Unified cancellation for close-button, outside-click, disable, and fresh-capture paths.
+- Response and follow-up context reset when a provider, model, or cloud key changes.
 - A testable application core independent of the PyQt interface.
 
 Sparkle AI does **not** persist conversation history or credentials, install a background service,

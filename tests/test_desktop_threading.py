@@ -13,7 +13,8 @@ environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from sparkle_ai.desktop import CaptureBridge, OverlayWidget
+from sparkle_ai.capture import ProviderMode
+from sparkle_ai.desktop import AIAssistant, CaptureBridge, OverlayWidget
 
 
 def test_capture_bridge_marshals_hotkey_signal_to_gui_thread() -> None:
@@ -57,6 +58,63 @@ def test_overlay_controls_have_accessible_names() -> None:
     assert overlay.error_label.accessibleName() == "Provider error"
     assert overlay.chat_input.accessibleName() == "Follow-up message"
     assert overlay.send_button.accessibleName() == "Send follow-up"
+    assert app is not None
+
+
+def test_overlay_starts_each_request_without_prior_follow_up_context() -> None:
+    app = QApplication.instance() or QApplication([])
+    overlay = OverlayWidget()
+    overlay.set_response("Prior answer")
+    overlay.chat_input.setText("Prior follow-up")
+
+    overlay.begin_response()
+
+    assert overlay.current_response == ""
+    assert overlay.response_label.text() == ""
+    assert overlay.chat_input.text() == ""
+    assert app is not None
+
+
+def test_assistant_invalidates_response_context_before_a_fresh_capture(monkeypatch) -> None:
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr("sparkle_ai.desktop.keyboard.add_hotkey", lambda *_: None)
+    assistant = AIAssistant()
+    assistant.overlay.set_response("Prior answer")
+    assistant.overlay.chat_input.setText("Prior follow-up")
+
+    assistant.process_text("Fresh capture")
+
+    assert assistant.overlay.current_response == ""
+    assert assistant.overlay.chat_input.text() == ""
+    assert assistant.pending_text == "Fresh capture"
+    assert assistant.start_timer.isActive()
+    assistant.cancel_processing()
+    assistant.overlay.dismiss()
+    assistant.tray_icon.hide()
+    assert app is not None
+
+
+def test_provider_change_clears_response_and_follow_up_context(monkeypatch) -> None:
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr("sparkle_ai.desktop.keyboard.add_hotkey", lambda *_: None)
+    assistant = AIAssistant()
+    assistant.provider_selection.use_cloud(
+        ProviderMode.GEMINI,
+        "session-key",
+        model="gemini-test",
+        cloud_consent=True,
+    )
+    assistant.overlay.set_response("Cloud account answer")
+    assistant.overlay.chat_input.setText("Cloud account follow-up")
+
+    assistant.select_ollama_provider()
+
+    assert assistant.provider_selection.mode is ProviderMode.OLLAMA
+    assert assistant.overlay.current_response == ""
+    assert assistant.overlay.chat_input.text() == ""
+    assert assistant.accepting_processor_output is False
+    assistant.overlay.dismiss()
+    assistant.tray_icon.hide()
     assert app is not None
 
 

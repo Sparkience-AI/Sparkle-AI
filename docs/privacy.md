@@ -36,8 +36,11 @@ remain governed by the selected provider and the user's account configuration.
 
 ## Retention and deletion
 
-The overlay retains the current response only for the running process. Closing the overlay cancels
-any deferred start and signals the current application task to stop between provider chunks.
+The overlay retains the current response only for the running process. Closing it with the button,
+clicking outside it, or disabling the assistant follows one cancellation lifecycle: deferred starts
+are removed, queued output is ignored, and the current task is signalled to stop between provider
+chunks. Every fresh capture starts with an empty response and follow-up context. Changing the
+provider, cloud key, or cloud model cancels current work and clears that context before reuse.
 Exiting is deferred while a blocking local provider call is still stopping, preventing unsafe
 worker destruction. Exiting the tray application clears in-memory state. There is no conversation
 database or analytics service.

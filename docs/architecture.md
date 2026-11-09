@@ -35,7 +35,8 @@ InputPolicy -> AnalysisService -> TextProvider
 The UI, tray integration, global hotkey, and worker thread remain together in `desktop.py`; this is
 a packaging move, not a PyQt/PySide rewrite. A Qt signal bridge marshals the global-hotkey callback
 onto the GUI thread, while a cancellable Qt timer owns deferred request starts. Unit tests target
-the bridge, monitoring/provider state, extracted core, overlay follow-up signal, and fake-provider
-behavior. CI installs all optional providers, then builds and smoke-tests the installed launcher on
+the bridge, monitoring/provider state, extracted core, unified overlay dismissal, response-context
+invalidation, stale worker-output rejection, follow-up signals, and fake-provider behavior. CI
+installs all optional providers, then builds and smoke-tests the installed launcher on
 Windows. Clean-environment GUI, hotkey, and explicitly approved live-provider tests remain release
 checks. Release evidence covers the source archive and Python wheel.

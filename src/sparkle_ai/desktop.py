@@ -368,7 +368,7 @@ class OverlayWidget(QWidget):
                 local_pos
             ):
                 if self.isVisible():
-                    self.hide()
+                    self.dismiss()
                     return True
         return super().eventFilter(obj, event)
 
@@ -392,6 +392,11 @@ class OverlayWidget(QWidget):
 
     def handle_close(self):
         debug_print("Close button clicked")
+        self.dismiss()
+
+    def dismiss(self):
+        """Cancel the active lifecycle before hiding the overlay."""
+
         self.cancellation_requested.emit()
         self.hide()
 
@@ -416,6 +421,15 @@ class OverlayWidget(QWidget):
         self.error_label.setText(error_message)
         self.error_label.show()
 
+    def begin_response(self):
+        """Start a request with no response or follow-up context from the prior request."""
+
+        self.current_response = ""
+        self.response_label.clear()
+        self.chat_input.clear()
+        self.error_label.clear()
+        self.error_label.hide()
+
     def set_response(self, text):
         debug_print("Setting response text")
         self.current_response = text
@@ -439,7 +453,6 @@ class OverlayWidget(QWidget):
             self.process_new_message(full_context)
 
     def process_new_message(self, message):
-        self.show_processing()
         self.analysis_requested.emit(message)
 
 
@@ -456,6 +469,7 @@ class AIAssistant(QMainWindow):
         self.text_processor = None
         self.pending_text = None
         self.pending_monitor_text = None
+        self.accepting_processor_output = False
         self.monitor_state = ClipboardMonitorState()
         self.provider_selection = ProviderSelection()
         self.capture_bridge = CaptureBridge(self)
@@ -601,7 +615,10 @@ class AIAssistant(QMainWindow):
             )
 
     def select_ollama_provider(self):
+        changed = self.provider_selection.mode is not ProviderMode.OLLAMA
         self.provider_selection.use_ollama()
+        if changed:
+            self.invalidate_response_context()
         self.ollama_action.setChecked(True)
         self.overlay.set_provider(self.provider_selection.display_name)
         self.update_tray_tooltip()
@@ -673,6 +690,7 @@ class AIAssistant(QMainWindow):
             model=model,
             cloud_consent=True,
         )
+        self.invalidate_response_context()
         {
             ProviderMode.GEMINI: self.gemini_action,
             ProviderMode.OPENAI: self.openai_action,
@@ -691,7 +709,10 @@ class AIAssistant(QMainWindow):
         self.clear_cloud_key(ProviderMode.ANTHROPIC)
 
     def clear_cloud_key(self, mode):
+        was_active = self.provider_selection.mode is mode
         self.provider_selection.clear_key(mode)
+        if was_active:
+            self.invalidate_response_context()
         self.sync_provider_action()
         self.overlay.set_provider(self.provider_selection.display_name)
         self.update_tray_tooltip()
@@ -704,6 +725,8 @@ class AIAssistant(QMainWindow):
         self.process_text(text)
 
     def process_text(self, text):
+        self.cancel_processing()
+        self.overlay.begin_response()
         self.overlay.show()
         self.overlay.show_processing()
         self.pending_text = text
@@ -751,13 +774,20 @@ class AIAssistant(QMainWindow):
             return
         self.overlay.set_provider(self.provider_selection.display_name)
         self.text_processor = TextProcessor(text, provider=provider)
-        self.text_processor.chunk_ready.connect(self.overlay.append_chunk)
+        self.text_processor.chunk_ready.connect(self.handle_chunk)
         self.text_processor.result_ready.connect(self.handle_response)
         self.text_processor.error_occurred.connect(self.handle_error)
         self.text_processor.finished.connect(self.handle_processor_finished)
+        self.accepting_processor_output = True
         self.text_processor.start()
 
+    def handle_chunk(self, chunk):
+        if self.accepting_processor_output and self.sender() is self.text_processor:
+            self.overlay.append_chunk(chunk)
+
     def handle_error(self, error_message):
+        if not self.accepting_processor_output or self.sender() is not self.text_processor:
+            return
         debug_print(f"Error handled: {error_message}")
         self.overlay.show_error(error_message)
 
@@ -767,10 +797,9 @@ class AIAssistant(QMainWindow):
         self.status_indicator.update_status(self.active)
         self.update_tray_tooltip()
         if not self.active:
-            self.cancel_processing()
             self.monitor_timer.stop()
             self.pending_monitor_text = None
-            self.overlay.hide()
+            self.overlay.dismiss()
 
     def update_tray_tooltip(self):
         monitoring = "monitoring on" if self.monitor_state.enabled else "monitoring off"
@@ -780,6 +809,8 @@ class AIAssistant(QMainWindow):
         )
 
     def handle_response(self, response):
+        if not self.accepting_processor_output or self.sender() is not self.text_processor:
+            return
         debug_print("Response received and processing complete")
         self.overlay.hide_processing()
         if response:
@@ -788,16 +819,24 @@ class AIAssistant(QMainWindow):
     def handle_processor_finished(self):
         processor = self.sender()
         if processor is self.text_processor:
+            self.accepting_processor_output = False
             processor.deleteLater()
             self.text_processor = None
 
     def cancel_processing(self):
+        self.accepting_processor_output = False
         self.start_timer.stop()
         self.monitor_timer.stop()
         self.pending_text = None
         self.pending_monitor_text = None
         if self.text_processor is not None:
             self.text_processor.stop()
+
+    def invalidate_response_context(self):
+        """Cancel work and remove follow-up context after a provider identity change."""
+
+        self.cancel_processing()
+        self.overlay.begin_response()
 
     def cleanup_and_exit(self):
         debug_print("Cleaning up and exiting")

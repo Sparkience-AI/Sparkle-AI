@@ -21,6 +21,9 @@ def test_overlay_follow_up_and_close_use_gui_thread_signals() -> None:
     assert "cancellation_requested = pyqtSignal()" in MAIN_SOURCE
     assert "self.analysis_requested.emit(message)" in MAIN_SOURCE
     assert "self.cancellation_requested.emit()" in MAIN_SOURCE
+    assert "self.dismiss()" in MAIN_SOURCE
+    assert "self.overlay.dismiss()" in MAIN_SOURCE
+    assert "self.overlay.hide()" not in MAIN_SOURCE
 
 
 def test_runtime_does_not_mutate_process_global_cloud_keys() -> None:
@@ -43,3 +46,10 @@ def test_runtime_does_not_log_captured_text_or_response_chunks() -> None:
 def test_close_cancels_deferred_processing_start() -> None:
     assert "self.start_timer.stop()" in MAIN_SOURCE
     assert "self.pending_text = None" in MAIN_SOURCE
+
+
+def test_fresh_requests_and_provider_changes_invalidate_old_output() -> None:
+    assert "self.overlay.begin_response()" in MAIN_SOURCE
+    assert "self.invalidate_response_context()" in MAIN_SOURCE
+    assert "self.accepting_processor_output = False" in MAIN_SOURCE
+    assert "self.text_processor.chunk_ready.connect(self.handle_chunk)" in MAIN_SOURCE

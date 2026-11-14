@@ -1,34 +1,40 @@
-name: Source release evidence
+name: Attested source release evidence
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
-  evidence:
+  windows-source-validation:
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Validate and build source artifacts
+      - name: Validate Windows source candidate
         shell: pwsh
         run: |
           uv sync --locked --all-groups --all-extras
           uv run --locked --all-extras pytest -q
-          uv build --no-sources
-          uv run --locked python scripts/release_evidence.py --dist dist --output dist/evidence --project sparkle-ai --version 0.1.0
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: sparkle-ai-source-release-evidence
-          path: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/evidence/*
-          if-no-files-found: error
+          uv build --no-sources --out-dir release/dist
+
+  release-evidence:
+    needs: windows-source-validation
+    uses: Sparkience-AI/.github/.github/workflows/reusable-python-release.yml@89f2cee919281a300c960fba3d8a8a124f1a61d0
+    with:
+      python-version: "3.12"
+      artifact-name: sparkle-ai-attested-source-release-evidence
+      expected-version: "0.1.0"
+      enable-attestations: true
+      retention-days: 14
